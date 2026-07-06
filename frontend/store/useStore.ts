@@ -111,19 +111,23 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   completeTask: async (id) => {
-    const updated = await get().updateTask(id, { status: 'completed' });
-
-    // Check if all daily tasks are completed
-    const allTasks = get().tasks;
-    const pendingCount = allTasks.filter(
+    // Snapshot BEFORE updateTask mutates local state
+    const tasksBefore = get().tasks;
+    const totalTasks = tasksBefore.length;
+    const pendingBefore = tasksBefore.filter(
       (t) => t.id !== id && t.status !== 'completed'
     ).length;
 
-    if (pendingCount === 0 && allTasks.length > 1) {
+    const updated = await get().updateTask(id, { status: 'completed' });
+
+    if (pendingBefore === 0 && totalTasks > 1) {
+      // This was the last remaining task — show Day Complete, no emoji burst
       set({ showDailyPopup: true });
+    } else {
+      // Mid-day task complete — show floating emoji burst only, no confetti
+      get().triggerCelebration();
     }
 
-    get().triggerCelebration('🎉 Task completed!');
     await get().fetchAnalytics();
     return updated;
   },

@@ -1,46 +1,55 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import confetti from 'canvas-confetti';
 import { useStore } from '@/store/useStore';
 
+const EMOJIS = ['🎉', '✨', '🎊', '⭐', '💫'];
+
+interface FloatingEmoji {
+  id: number;
+  emoji: string;
+  x: number; // left position in vw
+}
+
 export default function CelebrationOverlay() {
-  const { showCelebration, celebrationMessage, clearCelebration } = useStore();
+  const { showCelebration, clearCelebration } = useStore();
+  const [particles, setParticles] = useState<FloatingEmoji[]>([]);
 
   useEffect(() => {
     if (showCelebration) {
-      // Fire confetti
-      confetti({
-        particleCount: 120,
-        spread: 80,
-        origin: { y: 0.6 },
-        colors: ['#6366f1', '#8b5cf6', '#f59e0b', '#10b981', '#3b82f6'],
-      });
+      // Spawn 6 emoji particles at random horizontal positions
+      const burst: FloatingEmoji[] = Array.from({ length: 6 }, (_, i) => ({
+        id: Date.now() + i,
+        emoji: EMOJIS[Math.floor(Math.random() * EMOJIS.length)],
+        x: 30 + Math.random() * 40, // 30–70 vw, centred on screen
+      }));
+      setParticles(burst);
+
+      const timer = setTimeout(() => {
+        clearCelebration();
+        setParticles([]);
+      }, 1400);
+
+      return () => clearTimeout(timer);
     }
-  }, [showCelebration]);
+  }, [showCelebration, clearCelebration]);
 
   return (
     <AnimatePresence>
-      {showCelebration && (
-        <motion.div
-          initial={{ opacity: 0, y: -20, scale: 0.9 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -20, scale: 0.9 }}
-          className="fixed top-6 left-1/2 -translate-x-1/2 z-50"
+      {particles.map((p) => (
+        <motion.span
+          key={p.id}
+          initial={{ opacity: 1, y: 0, scale: 0.6 }}
+          animate={{ opacity: 0, y: -120, scale: 1.4 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 1.2, ease: 'easeOut' }}
+          className="fixed z-50 pointer-events-none select-none text-3xl"
+          style={{ left: `${p.x}vw`, bottom: '80px' }}
         >
-          <div className="bg-gray-900 border border-indigo-500/50 shadow-2xl shadow-indigo-500/20 rounded-2xl px-6 py-4 flex items-center gap-3">
-            <span className="text-2xl">🎉</span>
-            <p className="text-white font-semibold">{celebrationMessage}</p>
-            <button
-              onClick={clearCelebration}
-              className="text-gray-500 hover:text-gray-300 ml-2 text-lg leading-none"
-            >
-              ×
-            </button>
-          </div>
-        </motion.div>
-      )}
+          {p.emoji}
+        </motion.span>
+      ))}
     </AnimatePresence>
   );
 }
