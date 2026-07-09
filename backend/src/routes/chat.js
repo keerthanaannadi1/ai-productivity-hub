@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
-const OpenAI = require('openai');
+const Groq = require('groq-sdk');
 const db = require('../db/database');
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const SYSTEM_PROMPT = `You are FocusForge AI, a friendly and motivating productivity assistant built into the FocusForge app.
 
@@ -67,9 +67,9 @@ router.post('/message', async (req, res) => {
       ? `\n\nUser's current pending tasks: ${pendingTasks.map(t => `"${t.title}" (${t.priority})`).join(', ')}`
       : '';
 
-    // Call OpenAI
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    // Call Groq
+    const completion = await groq.chat.completions.create({
+      model: 'llama3-8b-8192',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT + taskContext },
         ...history.map(m => ({ role: m.role, content: m.content })),
@@ -123,9 +123,6 @@ router.post('/message', async (req, res) => {
       },
     });
   } catch (err) {
-    if (err.status === 401) {
-      return res.status(401).json({ success: false, error: 'Invalid OpenAI API key. Please check your .env file.' });
-    }
     res.status(500).json({ success: false, error: err.message });
   }
 });
