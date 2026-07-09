@@ -49,7 +49,7 @@ export default function AIChatbot() {
             <RiRobotLine className="text-indigo-400" />
             AI Assistant
           </h2>
-          <p className="text-gray-400 text-sm mt-0.5">Powered by GPT-4 · Ask anything</p>
+          <p className="text-gray-400 text-sm mt-0.5">Powered by Groq · Llama 3 · Ask anything</p>
         </div>
         {messages.length > 0 && (
           <button
