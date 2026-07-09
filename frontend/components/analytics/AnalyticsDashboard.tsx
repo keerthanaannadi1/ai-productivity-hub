@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '@/store/useStore';
 import {
@@ -9,10 +9,13 @@ import {
   RiTimerLine,
   RiBarChartLine,
 } from 'react-icons/ri';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isToday } from 'date-fns';
+
+type GraphTab = 'daily' | 'weekly';
 
 export default function AnalyticsDashboard() {
-  const { analytics, fetchAnalytics } = useStore();
+  const { analytics, fetchAnalytics, tasks } = useStore();
+  const [graphTab, setGraphTab] = useState<GraphTab>('daily');
 
   useEffect(() => {
     fetchAnalytics();
@@ -36,7 +39,7 @@ export default function AnalyticsDashboard() {
 
   const statCards = [
     {
-      label: 'Today\'s Tasks',
+      label: "Today's Tasks",
       value: analytics.today.tasks_completed,
       icon: RiCheckboxCircleLine,
       color: 'text-green-400',
@@ -65,9 +68,23 @@ export default function AnalyticsDashboard() {
     },
   ];
 
-  const chartData = analytics.weekly.chartData;
-  const maxTasks = Math.max(...chartData.map((d) => d.tasks_completed), 1);
-  const maxFocus = Math.max(...chartData.map((d) => d.focus_minutes), 1);
+  // --- Daily graph: tasks completed per hour today ---
+  const hours = Array.from({ length: 24 }, (_, h) => h);
+  const completedToday = tasks.filter(
+    (t) => t.status === 'completed' && t.completed_at && isToday(new Date(t.completed_at))
+  );
+  const tasksByHour = hours.map((h) => ({
+    hour: h,
+    count: completedToday.filter((t) => new Date(t.completed_at!).getHours() === h).length,
+  }));
+  // Only show hours 6am–11pm for a cleaner chart
+  const dailyChartData = tasksByHour.filter((d) => d.hour >= 6 && d.hour <= 23);
+  const maxDailyTasks = Math.max(...dailyChartData.map((d) => d.count), 1);
+
+  // --- Weekly graph: last 7 days ---
+  const weeklyChartData = analytics.weekly.chartData;
+  const maxWeeklyTasks = Math.max(...weeklyChartData.map((d) => d.tasks_completed), 1);
+  const maxWeeklyFocus = Math.max(...weeklyChartData.map((d) => d.focus_minutes), 1);
 
   return (
     <div className="space-y-6">
@@ -102,71 +119,147 @@ export default function AnalyticsDashboard() {
         })}
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Tasks chart */}
-        <div className="card">
-          <h3 className="text-sm font-semibold text-gray-300 mb-4">Tasks Completed (Last 7 Days)</h3>
-          {chartData.length === 0 ? (
-            <div className="h-32 flex items-center justify-center text-gray-500 text-sm">
-              No data yet — complete some tasks!
-            </div>
-          ) : (
-            <div className="flex items-end gap-2 h-32">
-              {chartData.map((day, i) => {
-                const height = maxTasks > 0 ? (day.tasks_completed / maxTasks) * 100 : 0;
-                return (
-                  <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
-                    <span className="text-xs text-indigo-400 font-medium">{day.tasks_completed || ''}</span>
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: `${height}%` }}
-                      transition={{ delay: i * 0.05, duration: 0.4 }}
-                      className="w-full bg-indigo-600 rounded-t-md min-h-[4px]"
-                      title={`${day.tasks_completed} tasks`}
-                    />
-                    <span className="text-xs text-gray-500">
-                      {day.date ? format(parseISO(day.date), 'EEE') : ''}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+      {/* Graph section */}
+      <div className="card space-y-4">
+        {/* Tab switcher */}
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-300">
+            {graphTab === 'daily' ? 'Tasks Completed Today (by hour)' : 'Last 7 Days Overview'}
+          </h3>
+          <div className="flex gap-1 bg-gray-800 rounded-lg p-1">
+            {(['daily', 'weekly'] as GraphTab[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setGraphTab(tab)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  graphTab === tab
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {tab === 'daily' ? '📅 Daily' : '📆 Weekly'}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Focus time chart */}
-        <div className="card">
-          <h3 className="text-sm font-semibold text-gray-300 mb-4">Focus Minutes (Last 7 Days)</h3>
-          {chartData.length === 0 ? (
-            <div className="h-32 flex items-center justify-center text-gray-500 text-sm">
-              No data yet — run some Pomodoro sessions!
-            </div>
-          ) : (
-            <div className="flex items-end gap-2 h-32">
-              {chartData.map((day, i) => {
-                const height = maxFocus > 0 ? (day.focus_minutes / maxFocus) * 100 : 0;
-                return (
-                  <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
-                    <span className="text-xs text-green-400 font-medium">
-                      {day.focus_minutes ? `${day.focus_minutes}m` : ''}
-                    </span>
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: `${height}%` }}
-                      transition={{ delay: i * 0.05, duration: 0.4 }}
-                      className="w-full bg-green-600 rounded-t-md min-h-[4px]"
-                      title={`${day.focus_minutes} min`}
-                    />
-                    <span className="text-xs text-gray-500">
-                      {day.date ? format(parseISO(day.date), 'EEE') : ''}
-                    </span>
+        {/* Daily graph */}
+        {graphTab === 'daily' && (
+          <motion.div
+            key="daily"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            {completedToday.length === 0 ? (
+              <div className="h-36 flex items-center justify-center text-gray-500 text-sm">
+                No tasks completed yet today — get started! 💪
+              </div>
+            ) : (
+              <div className="flex items-end gap-1 h-36">
+                {dailyChartData.map((d, i) => {
+                  const height = (d.count / maxDailyTasks) * 100;
+                  return (
+                    <div key={d.hour} className="flex-1 flex flex-col items-center gap-1">
+                      {d.count > 0 && (
+                        <span className="text-xs text-indigo-400 font-medium">{d.count}</span>
+                      )}
+                      <motion.div
+                        initial={{ height: 0 }}
+                        animate={{ height: d.count > 0 ? `${height}%` : '4px' }}
+                        transition={{ delay: i * 0.03, duration: 0.35 }}
+                        className={`w-full rounded-t-md ${
+                          d.count > 0 ? 'bg-indigo-600' : 'bg-gray-800'
+                        }`}
+                        style={{ minHeight: '4px' }}
+                        title={`${d.count} task${d.count !== 1 ? 's' : ''} at ${d.hour}:00`}
+                      />
+                      {/* Show label every 3 hours */}
+                      <span className="text-xs text-gray-600">
+                        {d.hour % 3 === 0 ? `${d.hour}h` : ''}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* Weekly graph */}
+        {graphTab === 'weekly' && (
+          <motion.div
+            key="weekly"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            className="space-y-6"
+          >
+            {weeklyChartData.length === 0 ? (
+              <div className="h-36 flex items-center justify-center text-gray-500 text-sm">
+                No data yet — complete some tasks!
+              </div>
+            ) : (
+              <>
+                {/* Tasks bar chart */}
+                <div>
+                  <p className="text-xs text-gray-500 mb-3 uppercase tracking-wider">Tasks Completed</p>
+                  <div className="flex items-end gap-2 h-32">
+                    {weeklyChartData.map((day, i) => {
+                      const height = (day.tasks_completed / maxWeeklyTasks) * 100;
+                      return (
+                        <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-xs text-indigo-400 font-medium">
+                            {day.tasks_completed || ''}
+                          </span>
+                          <motion.div
+                            initial={{ height: 0 }}
+                            animate={{ height: `${height}%` }}
+                            transition={{ delay: i * 0.05, duration: 0.4 }}
+                            className="w-full bg-indigo-600 rounded-t-md"
+                            style={{ minHeight: '4px' }}
+                            title={`${day.tasks_completed} tasks`}
+                          />
+                          <span className="text-xs text-gray-500">
+                            {day.date ? format(parseISO(day.date), 'EEE') : ''}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                </div>
+
+                {/* Focus minutes bar chart */}
+                <div>
+                  <p className="text-xs text-gray-500 mb-3 uppercase tracking-wider">Focus Minutes</p>
+                  <div className="flex items-end gap-2 h-32">
+                    {weeklyChartData.map((day, i) => {
+                      const height = (day.focus_minutes / maxWeeklyFocus) * 100;
+                      return (
+                        <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-xs text-green-400 font-medium">
+                            {day.focus_minutes ? `${day.focus_minutes}m` : ''}
+                          </span>
+                          <motion.div
+                            initial={{ height: 0 }}
+                            animate={{ height: `${height}%` }}
+                            transition={{ delay: i * 0.05, duration: 0.4 }}
+                            className="w-full bg-green-600 rounded-t-md"
+                            style={{ minHeight: '4px' }}
+                            title={`${day.focus_minutes} min`}
+                          />
+                          <span className="text-xs text-gray-500">
+                            {day.date ? format(parseISO(day.date), 'EEE') : ''}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </motion.div>
+        )}
       </div>
 
       {/* All-time summary */}
@@ -192,7 +285,7 @@ export default function AnalyticsDashboard() {
             <span className="text-2xl">🏆</span>
             <div>
               <p className="text-sm font-semibold text-orange-300">
-                {analytics.streak >= 30 ? 'Month-long streak!' : analytics.streak >= 7 ? 'Week streak!' : ''}
+                {analytics.streak >= 30 ? 'Month-long streak!' : 'Week streak!'}
               </p>
               <p className="text-xs text-orange-500">{analytics.streak} days in a row. Keep it going!</p>
             </div>
