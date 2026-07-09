@@ -69,7 +69,7 @@ router.post('/message', async (req, res) => {
 
     // Call Groq
     const completion = await groq.chat.completions.create({
-      model: 'llama3-8b-8192',
+      model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT + taskContext },
         ...history.map(m => ({ role: m.role, content: m.content })),
